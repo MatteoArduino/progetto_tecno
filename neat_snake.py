@@ -195,6 +195,17 @@ def get_inputs(snake, apple):
     return input_data
 
 
+
+
+def save_population(population):
+    with open('neat_population.pkl', 'wb') as f:
+        pickle.dump(population, f)
+
+def load_population():
+    with open('neat_population.pkl', 'rb') as f:
+        population = pickle.load(f)
+    return population
+
 def evaluate_genomes(genomes, config, population):
     for genome_id, genome in genomes:
         net = neat.nn.FeedForwardNetwork.create(genome, config)
@@ -239,13 +250,13 @@ def evaluate_genomes(genomes, config, population):
                 steps_without_eating = 0
             else:
                 steps_without_eating += 1
+                # Penalize more frequently if the snake does not eat the apple
+                if steps_without_eating > 20:
+                    genome.fitness -= 0.5
+                    if steps_without_eating > 30:
+                        break
 
-            if steps_without_eating > 50:
-                genome.fitness -= 5
-                break
-
-            genome.fitness += 0.1
-
+            # Reward moving towards the apple and penalize moving away
             head_x, head_y = snake.body[0]
             apple_x, apple_y = apple.position
             current_distance = abs(head_x - apple_x) + abs(head_y - apple_y)
@@ -255,6 +266,8 @@ def evaluate_genomes(genomes, config, population):
             else:
                 genome.fitness -= 0.5
 
+            genome.fitness += 0.1  # Small reward for surviving each step
+
             screen.fill(BLACK)
             draw_grid()
             draw_snake(snake)
@@ -262,15 +275,6 @@ def evaluate_genomes(genomes, config, population):
             draw_score(snake.score)
             pygame.display.flip()
             clock.tick(10)
-
-def save_population(population):
-    with open('neat_population.pkl', 'wb') as f:
-        pickle.dump(population, f)
-
-def load_population():
-    with open('neat_population.pkl', 'rb') as f:
-        population = pickle.load(f)
-    return population
 
 def main():
     show_start_screen()
@@ -314,3 +318,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
