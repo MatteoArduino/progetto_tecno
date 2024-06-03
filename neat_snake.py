@@ -7,7 +7,7 @@ import time
 
 pygame.init()
 
-
+#dimensioni schermata
 WIDTH, HEIGHT = 640, 480
 CELL_SIZE = 20
 
