@@ -3,7 +3,7 @@ import random
 import sys
 import neat
 import time
-
+import pickle
 
 pygame.init()
 
@@ -171,6 +171,8 @@ def get_inputs(snake, apple):
     distance_to_wall_down = (HEIGHT // CELL_SIZE) - head_y - 1
     distance_to_wall_left = head_x
     distance_to_wall_right = (WIDTH // CELL_SIZE) - head_x - 1
+    
+    
 
     
     distance_to_apple = abs(head_x - apple_x) + abs(head_y - apple_y)
@@ -197,11 +199,23 @@ def get_inputs(snake, apple):
         normalized_distance_to_apple  
     ]
     
+    
     return input_data
 
 
+def save_population(population, filename='population.pkl'):
+    with open(filename, 'wb') as f:
+        pickle.dump(population, f)
+    print(f"Population saved to {filename}")
 
-def evaluate_genomes(genomes, config):
+def load_population(filename='population.pkl'):
+    with open(filename, 'rb') as f:
+        population = pickle.load(f)
+    print(f"Population loaded from {filename}")
+    return population
+
+
+def evaluate_genomes(genomes, config, population):
     for genome_id, genome in genomes:
         net = neat.nn.FeedForwardNetwork.create(genome, config)
         snake = Snake()
@@ -229,6 +243,7 @@ def evaluate_genomes(genomes, config):
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
+                    save_population(population)  # Use population argument
                     pygame.quit()
                     sys.exit()
 
@@ -272,6 +287,8 @@ def evaluate_genomes(genomes, config):
             clock.tick(10)
 
 
+
+
 def main():
     show_start_screen()
 
@@ -280,19 +297,41 @@ def main():
                          neat.DefaultSpeciesSet, neat.DefaultStagnation,
                          'config.txt')
 
-    # Create the genome pool using NEAT configuration
-    p = neat.Population(config)
+    # Option to load existing population or create new
+    load_existing_population = input("Load existing population? (y/n): ").lower() == 'y'
+
+    if load_existing_population:
+        try:
+            p = load_population()
+            p.config = config  # Ensure config is properly set
+
+            # Remove existing reporters if any
+            p.reporters.reporters.clear()
+        except FileNotFoundError:
+            print("No saved population found. Creating new population.")
+            p = neat.Population(config)
+    else:
+        p = neat.Population(config)
 
     # Add a stdout reporter to show progress in the terminal.
     p.add_reporter(neat.StdOutReporter(True))
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
 
+    # Wrap the evaluate_genomes call to include the population object
+    def evaluate_genomes_with_population(genomes, config):
+        evaluate_genomes(genomes, config, p)
+
     # Run population evolution and get the best genome
-    winner = p.run(evaluate_genomes, 50)
+    winner = p.run(evaluate_genomes_with_population, 50)
+
+    # Save the population after running
+    save_population(p)
 
     # Run the game with the neural network of the best genome
-    evaluate_genomes([(1, winner)], config)
+    evaluate_genomes_with_population([(1, winner)], config)
 
 if __name__ == '__main__':
     main()
+
+
