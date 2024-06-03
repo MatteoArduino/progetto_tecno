@@ -1,23 +1,21 @@
+import pickle
 import pygame
 import random
 import sys
 import neat
 import time
-import pickle
+from collections import Counter
 
 pygame.init()
 
-#dimensioni schermata
+# Dimensioni schermata
 WIDTH, HEIGHT = 640, 480
 CELL_SIZE = 20
-
 
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 
-
 font = pygame.font.SysFont(None, 48)
-
 
 apple_img = pygame.Surface((CELL_SIZE, CELL_SIZE))
 apple_img.fill((255, 0, 0))  # Red apple
@@ -28,13 +26,11 @@ head_img.fill((0, 0, 255))  # Blue snake head
 tail_img = pygame.Surface((CELL_SIZE, CELL_SIZE))
 tail_img.fill((0, 255, 255))  # Cyan snake tail
 
-# configuro la schermata di gioco
+# Configuro la schermata di gioco
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption('Snake Game')
 
-
 clock = pygame.time.Clock()
-
 
 DIRECTIONS = {
     'up': (0, -1),
@@ -57,17 +53,17 @@ class Snake:
         dir_x, dir_y = DIRECTIONS[self.direction]
         new_head = (head_x + dir_x, head_y + dir_y)
 
-        #controllo se lo snake colpisce il muro
+        # Controllo se lo snake colpisce il muro
         if new_head[0] < 0 or new_head[0] >= WIDTH // CELL_SIZE or \
            new_head[1] < 0 or new_head[1] >= HEIGHT // CELL_SIZE:
             
             return True
 
-        #controllo se lo snake colpisce un pezzo del suo corpo
+        # Controllo se lo snake colpisce un pezzo del suo corpo
         if new_head in self.body:
+            
             return True
 
-        
         self.body = [new_head] + self.body[:-1]
 
         return False
@@ -159,7 +155,7 @@ def get_inputs(snake, apple):
         return 0 <= x < WIDTH // CELL_SIZE and 0 <= y < HEIGHT // CELL_SIZE and (x, y) not in snake.body
 
     def distance_to_obstacle(dx, dy):
-        x, y = head_x, head_y
+        x, y = head_x, head_y  # Fix: assign head_x and head_y to x, y
         distance = 0
         while cell_is_free(x + dx, y + dy):
             x += dx
@@ -171,9 +167,6 @@ def get_inputs(snake, apple):
     distance_to_wall_down = (HEIGHT // CELL_SIZE) - head_y - 1
     distance_to_wall_left = head_x
     distance_to_wall_right = (WIDTH // CELL_SIZE) - head_x - 1
-    
-    
-
     
     distance_to_apple = abs(head_x - apple_x) + abs(head_y - apple_y)
     max_distance = (WIDTH // CELL_SIZE) + (HEIGHT // CELL_SIZE)
@@ -199,20 +192,7 @@ def get_inputs(snake, apple):
         normalized_distance_to_apple  
     ]
     
-    
     return input_data
-
-
-def save_population(population, filename='population.pkl'):
-    with open(filename, 'wb') as f:
-        pickle.dump(population, f)
-    print(f"Population saved to {filename}")
-
-def load_population(filename='population.pkl'):
-    with open(filename, 'rb') as f:
-        population = pickle.load(f)
-    print(f"Population loaded from {filename}")
-    return population
 
 
 def evaluate_genomes(genomes, config, population):
@@ -243,7 +223,7 @@ def evaluate_genomes(genomes, config, population):
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    save_population(population)  # Use population argument
+                    save_population(population)  # Save the population before quitting
                     pygame.quit()
                     sys.exit()
 
@@ -260,23 +240,20 @@ def evaluate_genomes(genomes, config, population):
             else:
                 steps_without_eating += 1
 
-                # Penalize for not eating for too long
-                if steps_without_eating > 10:
-                    genome.fitness -= 5
-                    break
+            if steps_without_eating > 50:
+                genome.fitness -= 5
+                break
 
-            # Reward the genome for each step it stays alive
             genome.fitness += 0.1
 
-            # Additional reward for moving towards the apple
             head_x, head_y = snake.body[0]
             apple_x, apple_y = apple.position
             current_distance = abs(head_x - apple_x) + abs(head_y - apple_y)
             next_distance = abs(head_x + DIRECTIONS[direction][0] - apple_x) + abs(head_y + DIRECTIONS[direction][1] - apple_y)
             if next_distance < current_distance:
-                genome.fitness += 0.5  # Reward for moving towards the apple
+                genome.fitness += 0.5
             else:
-                genome.fitness -= 0.5  # Penalize for moving away from the apple
+                genome.fitness -= 0.5
 
             screen.fill(BLACK)
             draw_grid()
@@ -286,52 +263,54 @@ def evaluate_genomes(genomes, config, population):
             pygame.display.flip()
             clock.tick(10)
 
+def save_population(population):
+    with open('neat_population.pkl', 'wb') as f:
+        pickle.dump(population, f)
 
-
+def load_population():
+    with open('neat_population.pkl', 'rb') as f:
+        population = pickle.load(f)
+    return population
 
 def main():
     show_start_screen()
 
-    # Load NEAT configuration from the config file
     config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                          neat.DefaultSpeciesSet, neat.DefaultStagnation,
                          'config.txt')
 
-    # Option to load existing population or create new
     load_existing_population = input("Load existing population? (y/n): ").lower() == 'y'
 
     if load_existing_population:
         try:
             p = load_population()
-            p.config = config  # Ensure config is properly set
+            p.config = config  
 
-            # Remove existing reporters if any
             p.reporters.reporters.clear()
+
+            node_ids = set()
+            for genome_id, genome in p.population.items():
+                node_ids.update(genome.nodes.keys())
+            max_node_id = max(node_ids) + 1
+            config.genome_config.node_indexer = iter(range(max_node_id, max_node_id + 1000000))
         except FileNotFoundError:
             print("No saved population found. Creating new population.")
             p = neat.Population(config)
     else:
         p = neat.Population(config)
 
-    # Add a stdout reporter to show progress in the terminal.
     p.add_reporter(neat.StdOutReporter(True))
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
 
-    # Wrap the evaluate_genomes call to include the population object
     def evaluate_genomes_with_population(genomes, config):
         evaluate_genomes(genomes, config, p)
 
-    # Run population evolution and get the best genome
     winner = p.run(evaluate_genomes_with_population, 50)
 
-    # Save the population after running
     save_population(p)
 
-    # Run the game with the neural network of the best genome
     evaluate_genomes_with_population([(1, winner)], config)
 
 if __name__ == '__main__':
     main()
-
-
